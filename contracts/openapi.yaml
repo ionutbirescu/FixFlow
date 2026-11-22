@@ -1,0 +1,557 @@
+openapi: 3.0.3
+info:
+  title: FixFlow API
+  version: 0.1.0
+  description: |
+    REST API of FixFlow's two servers. S1 (write, port 8081) handles login and every command that changes
+    state; S2 (read, port 8082) serves every query. Each operation lists the server it belongs to.
+
+    - Auth: JWT (HS256, 8 h) from `POST /auth/login`, sent as `Authorization: Bearer <token>`.
+      Roles: `TECHNICIAN`, `MANAGER`. Technicians only see their own reports and images.
+    - IDs are UUIDs. Timestamps are ISO-8601 UTC (`2026-11-22T14:05:00Z`); plain dates are ISO-8601 (`2026-12-15`).
+    - Every 4xx/5xx response has an `ErrorResponse` body.
+    - The Java records in `contracts` (`com.fixflow.contracts.api`) mirror these schemas.
+servers:
+  - url: http://localhost:8081
+    description: S1 write server
+  - url: http://localhost:8082
+    description: S2 read server
+
+tags:
+  - name: S1 write
+    description: Auth, report upload, machine management and the internal webhook (port 8081)
+  - name: S2 read
+    description: Reports, machines, maintenance history and images (port 8082)
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      tags: [S1 write]
+      operationId: login
+      summary: Log in and get a JWT
+      servers: [{ url: http://localhost:8081, description: S1 write server }]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Logged in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/users:
+    post:
+      tags: [S1 write]
+      operationId: createUser
+      summary: Create a user account (MANAGER only)
+      servers: [{ url: http://localhost:8081, description: S1 write server }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateUserRequest' }
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /reports:
+    post:
+      tags: [S1 write]
+      operationId: createReport
+      summary: Upload a photo of a faulty machine
+      description: |
+        Saves the image to `/data/images/<uuid>.<ext>`, inserts the image and the report (`PENDING`) in one
+        transaction, then publishes `report.created` to Kafka after the commit. Poll S2's `GET /reports/{id}`
+        with the returned `reportId`. Any authenticated user.
+      servers: [{ url: http://localhost:8081, description: S1 write server }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image, machineId, description]
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: JPG or PNG, at most 10 MB
+                machineId:
+                  type: string
+                  format: uuid
+                description:
+                  type: string
+                  example: Oil leak under the hydraulic press
+            encoding:
+              image:
+                contentType: image/jpeg, image/png
+      responses:
+        '202':
+          description: Accepted; the AI report is produced asynchronously
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateReportResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413':
+          description: Image larger than 10 MB
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '415':
+          description: Image is not JPG or PNG
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+    get:
+      tags: [S2 read]
+      operationId: listReports
+      summary: List reports, newest first
+      description: Technicians get only their own reports; managers get everyone's.
+      servers: [{ url: http://localhost:8082, description: S2 read server }]
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ReportStatus' }
+        - name: machineId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          description: Only reports created at or after this instant
+          schema: { type: string, format: date-time, example: '2026-11-01T00:00:00Z' }
+        - name: to
+          in: query
+          description: Only reports created before this instant
+          schema: { type: string, format: date-time, example: '2026-12-01T00:00:00Z' }
+        - name: page
+          in: query
+          description: Zero-based page index
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: One page of reports
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReportSummaryPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /reports/{id}:
+    get:
+      tags: [S2 read]
+      operationId: getReport
+      summary: Get a report with its status and AI result
+      description: |
+        The client polls this every 3 s until `status` is `DONE` or `FAILED`. Technicians get `404` for
+        reports that are not theirs.
+      servers: [{ url: http://localhost:8082, description: S2 read server }]
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: The report
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReportDetailDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /machines:
+    get:
+      tags: [S2 read]
+      operationId: listMachines
+      summary: List all machines, by name
+      servers: [{ url: http://localhost:8082, description: S2 read server }]
+      responses:
+        '200':
+          description: All machines
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MachineDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [S1 write]
+      operationId: createMachine
+      summary: Add a machine (MANAGER only)
+      servers: [{ url: http://localhost:8081, description: S1 write server }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineRequest' }
+      responses:
+        '201':
+          description: Machine created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /machines/{id}:
+    put:
+      tags: [S1 write]
+      operationId: updateMachine
+      summary: Edit a machine (MANAGER only)
+      servers: [{ url: http://localhost:8081, description: S1 write server }]
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineRequest' }
+      responses:
+        '200':
+          description: Machine updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [S1 write]
+      operationId: deleteMachine
+      summary: Delete a machine (MANAGER only)
+      servers: [{ url: http://localhost:8081, description: S1 write server }]
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Machine deleted
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The machine still has reports
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /machines/{id}/history:
+    get:
+      tags: [S2 read]
+      operationId: getMachineHistory
+      summary: Get a machine's maintenance log, newest first
+      servers: [{ url: http://localhost:8082, description: S2 read server }]
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Maintenance log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MaintenanceEventDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /images/{id}:
+    get:
+      tags: [S2 read]
+      operationId: getImage
+      summary: Download an uploaded image
+      description: Streams the file from `/data/images`. Technicians get `404` for images of reports that are not theirs.
+      servers: [{ url: http://localhost:8082, description: S2 read server }]
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: The image file
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /internal/report-ready:
+    post:
+      tags: [S1 write]
+      operationId: reportReady
+      summary: Webhook from S2 when the AI report is done or failed
+      description: |
+        Called by S2, never by the client. Sets the report's status and `completed_at` (and `error` when
+        `FAILED`). Authenticated with the shared `X-Webhook-Secret` header instead of a JWT.
+      servers: [{ url: http://localhost:8081, description: S1 write server }]
+      security:
+        - webhookSecret: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReportReadyWebhook' }
+      responses:
+        '204':
+          description: Status updated
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    webhookSecret:
+      type: apiKey
+      in: header
+      name: X-Webhook-Secret
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: Missing or invalid input
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Missing, invalid or expired credentials
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: Authenticated, but the role is not allowed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Not found, or not visible to the caller
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: Conflicts with existing data
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  schemas:
+    Role:
+      type: string
+      enum: [TECHNICIAN, MANAGER]
+    ReportStatus:
+      type: string
+      enum: [PENDING, DONE, FAILED]
+    Severity:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+    MaintenanceType:
+      type: string
+      enum: [PREVENTIVE, CORRECTIVE, INSPECTION]
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string, example: tech1 }
+        password: { type: string, format: password, example: secret }
+
+    LoginResponse:
+      type: object
+      required: [token, role]
+      properties:
+        token:
+          type: string
+          description: JWT (HS256), valid for 8 hours
+          example: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZWNoMSJ9.signature
+        role: { $ref: '#/components/schemas/Role' }
+
+    CreateUserRequest:
+      type: object
+      required: [username, password, role]
+      properties:
+        username: { type: string, example: tech2 }
+        password: { type: string, format: password, example: secret }
+        role: { $ref: '#/components/schemas/Role' }
+
+    UserDto:
+      type: object
+      required: [id, username, role]
+      properties:
+        id: { type: string, format: uuid, example: 9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a }
+        username: { type: string, example: tech2 }
+        role: { $ref: '#/components/schemas/Role' }
+
+    CreateReportResponse:
+      type: object
+      required: [reportId]
+      properties:
+        reportId: { type: string, format: uuid, example: 3f0e2c1a-5b6d-4e7f-8a9b-0c1d2e3f4a5b }
+
+    MachineRequest:
+      type: object
+      required: [name, model, location, installedAt, serviceIntervalDays]
+      properties:
+        name: { type: string, example: CNC Lathe 01 }
+        model: { type: string, example: Haas ST-10 }
+        location: { type: string, example: Hall A }
+        installedAt: { type: string, format: date, example: '2021-03-10' }
+        serviceIntervalDays:
+          type: integer
+          minimum: 1
+          description: Days between preventive services
+          example: 90
+
+    MachineDto:
+      type: object
+      required: [id, name, model, location, installedAt, serviceIntervalDays]
+      properties:
+        id: { type: string, format: uuid, example: 0b6e1f2a-3c4d-4e5f-9a6b-7c8d9e0f1a2b }
+        name: { type: string, example: CNC Lathe 01 }
+        model: { type: string, example: Haas ST-10 }
+        location: { type: string, example: Hall A }
+        installedAt: { type: string, format: date, example: '2021-03-10' }
+        serviceIntervalDays:
+          type: integer
+          minimum: 1
+          description: Days between preventive services
+          example: 90
+
+    MaintenanceEventDto:
+      type: object
+      required: [id, machineId, performedAt, type, description, performedBy]
+      properties:
+        id: { type: string, format: uuid, example: 5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d }
+        machineId: { type: string, format: uuid, example: 0b6e1f2a-3c4d-4e5f-9a6b-7c8d9e0f1a2b }
+        performedAt: { type: string, format: date-time, example: '2026-08-14T09:00:00Z' }
+        type: { $ref: '#/components/schemas/MaintenanceType' }
+        description: { type: string, example: Replaced spindle belt }
+        performedBy: { type: string, example: tech1 }
+
+    AiReportResult:
+      type: object
+      description: The report JSON produced by the AI agent. Note the snake_case `id_image`, fixed by the contract.
+      required: [id_image, report, severity, recommendations, nextServiceDate]
+      properties:
+        id_image: { type: string, format: uuid, example: 6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f }
+        report:
+          type: string
+          example: Hydraulic fluid is leaking from the main cylinder seal; the floor around the press is contaminated.
+        severity: { $ref: '#/components/schemas/Severity' }
+        recommendations:
+          type: array
+          items: { type: string }
+          example: [Replace the cylinder seal, Clean the floor and check fluid level]
+        nextServiceDate:
+          type: string
+          format: date
+          description: Suggested day for the next service
+          example: '2026-11-29'
+
+    ReportSummaryDto:
+      type: object
+      required: [id, machineId, userId, description, status, severity, createdAt, completedAt]
+      properties:
+        id: { type: string, format: uuid, example: 3f0e2c1a-5b6d-4e7f-8a9b-0c1d2e3f4a5b }
+        machineId: { type: string, format: uuid, example: 0b6e1f2a-3c4d-4e5f-9a6b-7c8d9e0f1a2b }
+        userId: { type: string, format: uuid, example: 9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a }
+        description: { type: string, example: Oil leak under the hydraulic press }
+        status: { $ref: '#/components/schemas/ReportStatus' }
+        severity:
+          description: '`null` until the report is `DONE`'
+          nullable: true
+          allOf: [{ $ref: '#/components/schemas/Severity' }]
+        createdAt: { type: string, format: date-time, example: '2026-11-22T14:05:00Z' }
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: '`null` while the report is `PENDING`'
+          example: '2026-11-22T14:05:12Z'
+
+    ReportSummaryPage:
+      type: object
+      required: [content, page, size, totalElements, totalPages]
+      properties:
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/ReportSummaryDto' }
+        page: { type: integer, description: Zero-based page index, example: 0 }
+        size: { type: integer, example: 20 }
+        totalElements: { type: integer, format: int64, example: 42 }
+        totalPages: { type: integer, example: 3 }
+
+    ReportDetailDto:
+      type: object
+      required: [id, machineId, userId, imageId, description, status, createdAt, completedAt, error, aiReport]
+      properties:
+        id: { type: string, format: uuid, example: 3f0e2c1a-5b6d-4e7f-8a9b-0c1d2e3f4a5b }
+        machineId: { type: string, format: uuid, example: 0b6e1f2a-3c4d-4e5f-9a6b-7c8d9e0f1a2b }
+        userId: { type: string, format: uuid, example: 9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a }
+        imageId: { type: string, format: uuid, example: 6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f }
+        description: { type: string, example: Oil leak under the hydraulic press }
+        status: { $ref: '#/components/schemas/ReportStatus' }
+        createdAt: { type: string, format: date-time, example: '2026-11-22T14:05:00Z' }
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: '`null` while the report is `PENDING`'
+          example: '2026-11-22T14:05:12Z'
+        error:
+          type: string
+          nullable: true
+          description: Why the AI failed; only set when `FAILED`
+          example: null
+        aiReport:
+          description: Only set when `DONE`
+          nullable: true
+          allOf: [{ $ref: '#/components/schemas/AiReportResult' }]
+
+    ReportReadyWebhook:
+      type: object
+      required: [reportId, status]
+      properties:
+        reportId: { type: string, format: uuid, example: 3f0e2c1a-5b6d-4e7f-8a9b-0c1d2e3f4a5b }
+        status:
+          type: string
+          enum: [DONE, FAILED]
+        error:
+          type: string
+          description: Why the AI failed; only sent when `FAILED`
+          example: Gemini request timed out after 30 s
+
+    ErrorResponse:
+      type: object
+      required: [timestamp, status, error, message, path]
+      properties:
+        timestamp: { type: string, format: date-time, example: '2026-11-22T14:05:00Z' }
+        status: { type: integer, example: 404 }
+        error: { type: string, example: Not Found }
+        message: { type: string, example: Report 3f0e2c1a-5b6d-4e7f-8a9b-0c1d2e3f4a5b not found }
+        path: { type: string, example: /reports/3f0e2c1a-5b6d-4e7f-8a9b-0c1d2e3f4a5b }

@@ -15,6 +15,23 @@ Project 2 for CEBP: a distributed industrial maintenance system. A technician up
 
 The root `pom.xml` is the Maven parent: it pins Spring Boot 3.5 and Java 21, and manages the versions of the internal modules and the Spring AI BOM. Add dependencies in a module's own `pom.xml` without a `<version>`.
 
+## Contracts
+
+- [`contracts/openapi.yaml`](contracts/openapi.yaml) describes every S1 and S2 endpoint. The client's MSW mocks and API types are built from it.
+- The Java side lives in `com.fixflow.contracts`:
+  - `api`: request and response records
+  - `event`: the `report.created` event and Kafka topic names
+  - `webhook`: the `POST /internal/report-ready` payload
+  - `ai`: `AiReportService`, `AiReportResult` and `AiReportException`
+  - `model`: the shared enums
+- Run S2 with `--spring.profiles.active=mock` to use `MockAiReportService` instead of Gemini. The description decides the severity:
+  - fire, smoke, spark or burn → `CRITICAL`
+  - leak, overheat, crack or broken → `HIGH`
+  - noise, vibration, wear or loose → `MEDIUM`
+  - anything else → `LOW`
+  - `#fail` anywhere in the description makes the mock throw `AiReportException`, to test the `FAILED` path.
+- `OpenApiContractTest` fails the build if the spec and the Java records drift apart. Change a contract only with agreement from both sides, and update both files in the same PR.
+
 ## Prerequisites
 
 - JDK 21 or newer (the build targets Java 21)

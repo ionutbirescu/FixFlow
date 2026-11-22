@@ -13,4 +13,28 @@
     <artifactId>contracts</artifactId>
     <name>FixFlow :: Contracts</name>
     <description>Shared DTOs, events and the AiReportService interface used by every module</description>
+
+    <dependencies>
+        <!-- @Service/@Profile for MockAiReportService (profile "mock") -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+        <!-- @JsonProperty/@JsonFormat so every module serializes the contracts the same way -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-json</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>
