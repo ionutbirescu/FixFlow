@@ -1,6 +1,14 @@
 spring:
   application:
     name: s1-write
+  datasource:
+    # Defaults match a local Postgres; Docker Compose sets the DB_* variables from .env.
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:fixflow}
+    username: ${DB_USER:fixflow}
+    password: ${DB_PASSWORD:fixflow}
+  flyway:
+    # The SQL files live in contracts/src/main/resources/db/migration (on the classpath through contracts).
+    locations: classpath:db/migration
 
 server:
   port: 8081
