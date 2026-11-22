@@ -11,7 +11,8 @@ Project 2 for CEBP: a distributed industrial maintenance system. A technician up
 | `s2-read/` | S2 read server: Kafka consumer, AI pipeline, every `GET` endpoint (Spring Boot) | 8082 |
 | `ai-agent/` | Gemini-backed `AiReportService`, a library loaded by S2 (plain jar) | – |
 | `mcp-server/` | Spring AI MCP server with read-only machine tools (Spring Boot) | 8090 |
-| `client/` | React + TypeScript + Vite web app | 3000 |
+| `client/` | React + TypeScript + Vite web app, and its Nginx image | 3000 |
+| `docker/` | Files Docker Compose mounts: the Postgres init script | – |
 
 The root `pom.xml` is the Maven parent: it pins Spring Boot 3.5 and Java 21, and manages the versions of the internal modules and the Spring AI BOM. Add dependencies in a module's own `pom.xml` without a `<version>`.
 
@@ -51,6 +52,7 @@ One shared PostgreSQL 16 database. The Flyway migrations live in [`contracts/src
   - 5 machines with fixed IDs, `00000000-0000-4000-8000-000000000101` to `…105`, and 3 to 6 history entries each.
   - The history is dated relative to the day the migration runs. Counting from the last preventive service, Hydraulic Press 02 is overdue, Conveyor Belt 03 and Air Compressor 04 are due within 10 days, and the other two are fine.
 - Connection settings come from `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` and `DB_PASSWORD`. They default to `localhost`, `5432`, `fixflow`, `fixflow` and `fixflow`.
+- mcp-server connects as `DB_READONLY_USER`, a login that can only `SELECT`. The Compose database creates it on its first start (`docker/postgres/init`).
 - Never edit a migration that is already on `main`. Add a new `V3__….sql` instead.
 - `DatabaseMigrationsTest` runs the migrations against a real Postgres (Testcontainers). It checks the six tables, that each `CHECK` matches its Java enum, the seed data, and the constraints the services rely on.
 - In S2 or mcp-server tests, add `flyway-core` and `flyway-database-postgresql` with `<scope>test</scope>`. A `@SpringBootTest` then builds the same schema in its Testcontainers database. Keep Flyway out of their runtime dependencies so only S1 migrates.
@@ -72,12 +74,7 @@ Backend, from the repo root:
 ./mvnw -pl s1-write spring-boot:run    # run one service (s1-write, s2-read or mcp-server)
 ```
 
-S1 needs PostgreSQL to start. Until the Compose file is in, start one with:
-
-```bash
-docker run -d --name fixflow-db -p 5432:5432 \
-  -e POSTGRES_DB=fixflow -e POSTGRES_USER=fixflow -e POSTGRES_PASSWORD=fixflow postgres:16-alpine
-```
+S1 needs PostgreSQL to start: run `docker compose up -d postgres` first (see below).
 
 In IntelliJ, open the root `pom.xml` as a project and run the `*Application` class of a service.
 
@@ -89,7 +86,60 @@ npm install
 npm run dev      # http://localhost:3000
 ```
 
+## Docker Compose
+
+`docker-compose.yml` starts the shared infrastructure and the client. Each backend package adds its own service to it.
+
+```bash
+cp .env.example .env                      # then fill in JWT_SECRET and WEBHOOK_SECRET
+docker compose up -d                      # everything below
+docker compose up -d postgres kafka-init  # only the database and Kafka, to run the services from the IDE
+docker compose down                       # stop; the data stays in the volumes
+docker compose down -v                    # stop and delete the database, Kafka data and uploaded images
+```
+
+| Service | Address | What it is |
+| --- | --- | --- |
+| `postgres` | `localhost:5432` | PostgreSQL 16; creates the read-only login on its first start |
+| `kafka` | `localhost:9092` from the host, `kafka:29092` from containers | Kafka in KRaft mode, one node |
+| `kafka-init` | – | Creates `report.created` and `report.created.DLT` (3 partitions each), then exits |
+| `kafka-ui` | http://localhost:8080 | Topics, messages and consumer groups |
+| `client` | http://localhost:3000 | The React app served by Nginx (`client/Dockerfile`) |
+
+- Kafka's auto-create is off, so the only topics are the ones `kafka-init` makes.
+- The `images-data` volume holds the uploaded photos. S1 and S2 both mount it at `/data/images`, so run both containers as the same user (UID) to let S2 read what S1 writes.
+- The client calls S1 and S2 directly from the browser. Their URLs are baked in when the image is built, from the `VITE_S1_URL` and `VITE_S2_URL` build args.
+- The database init script only runs when the `postgres-data` volume is new. After changing it, run `docker compose down -v`.
+
+To add your service, build from the repo root (the Maven build needs the parent `pom.xml` and `contracts/`) and wait for the infrastructure. For example:
+
+```yaml
+  s2-read:
+    build:
+      context: .
+      dockerfile: s2-read/Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      DB_HOST: postgres
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+    volumes:
+      - images-data:/data/images
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+```
+
+mcp-server uses `DB_USER: ${DB_READONLY_USER}` and `DB_PASSWORD: ${DB_READONLY_PASSWORD}` instead.
+
 ## Workflow
 
 - One branch per task, opened as a PR against `main` with 1 reviewer.
-- CI (`.github/workflows/ci.yml`) builds and tests the backend and lints and builds the client on every PR; keep it green before merging.
+- CI (`.github/workflows/ci.yml`) builds and tests the backend, lints and builds the client, and checks the Compose file and the client image on every PR; keep it green before merging.
