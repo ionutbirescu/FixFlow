@@ -42,3 +42,13 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+
+  docker:
+    name: Docker (Compose + client image)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check docker-compose.yml
+        run: docker compose --env-file .env.example config --quiet
+      - name: Build the client image
+        run: docker compose --env-file .env.example build client
