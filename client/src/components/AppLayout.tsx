@@ -1,6 +1,8 @@
 import { Link, NavLink, Outlet } from 'react-router'
 import { useAuth } from '../auth/AuthContext'
 import { ROLE_LABELS } from '../auth/roles'
+import { Clock } from './Clock'
+import { ThemeSwitch } from './ThemeSwitch'
 
 /** The frame around every signed-in page. Only rendered under RequireAuth, so a session always exists. */
 export function AppLayout() {
@@ -9,7 +11,8 @@ export function AppLayout() {
   const isManager = session.role === 'MANAGER'
 
   return (
-    <div className="app">
+    // data-role picks the role's colour, used on the menu tabs and the role tag
+    <div className="app" data-role={session.role}>
       <header className="app-header">
         <Link to="/" className="brand">
           FixFlow
@@ -23,16 +26,22 @@ export function AppLayout() {
           {isManager && <NavLink to="/users/new">Add user</NavLink>}
         </nav>
         <div className="app-user">
-          <span className="app-user-name">{session.username ?? 'Signed in'}</span>
+          <div className="app-player">
+            <span className="app-user-name">{session.username ?? 'Signed in'}</span>
+            <Clock className="app-clock" />
+          </div>
           <span className="badge">{ROLE_LABELS[session.role]}</span>
           <button className="button button-small" type="button" onClick={logout}>
             Sign out
           </button>
         </div>
       </header>
-      <main className="app-main">
+      <main className="panel app-main">
         <Outlet />
       </main>
+      <footer className="app-footer">
+        <ThemeSwitch />
+      </footer>
     </div>
   )
 }

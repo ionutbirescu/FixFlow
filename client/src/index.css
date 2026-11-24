@@ -1,53 +1,75 @@
+/* Theme: a game pause menu over a city skyline, by day or by night. A sky behind translucent panels,
+   condensed italic headings, and menu tabs that turn solid when selected. */
+
+@import '@fontsource/barlow/latin-400.css';
+@import '@fontsource/barlow/latin-600.css';
+@import '@fontsource/barlow-condensed/latin-600.css';
+@import '@fontsource/barlow-condensed/latin-700.css';
+@import '@fontsource/barlow-condensed/latin-800-italic.css';
+
+/* Every colour is light-dark(day, night). The browser picks by color-scheme: the system setting,
+   unless the Day/Night switch (src/theme.ts) set data-theme on <html>. */
 :root {
-  --bg: #f4f5f7;
-  --surface: #ffffff;
-  --text: #1c2430;
-  --muted: #5b6574;
-  --border: #d9dee5;
-  --subtle: #eceff3;
-  --accent: #c2410c;
-  --accent-hover: #9a3412;
-  --on-accent: #ffffff;
-  --focus: #2563eb;
-  --notice-bg: #eef4ff;
-  --notice-border: #c7d7fe;
-  --notice-text: #1e3a8a;
-  --error-bg: #fdecec;
-  --error-border: #f5c2c2;
-  --error-text: #8f1d1d;
-  --radius: 8px;
-  --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 4px 12px rgb(16 24 40 / 6%);
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  /* The sky, top to bottom, and the light low over the horizon */
+  --sky-top: light-dark(#6dbdf2, #07040f);
+  --sky-mid: light-dark(#b5e0f8, #160a2c);
+  --sky-low: light-dark(#fde3cf, #3b0f4a);
+  --sky-horizon: light-dark(#ffc2a8, #7a1d55);
+  --sun: light-dark(rgb(255 244 214 / 90%), rgb(255 170 80 / 75%));
+  --haze: light-dark(rgb(255 61 127 / 22%), rgb(255 61 127 / 55%));
+
+  /* Surfaces and text */
+  --panel: light-dark(rgb(255 255 255 / 84%), rgb(14 8 30 / 84%));
+  --well: light-dark(rgb(26 18 48 / 6%), rgb(0 0 0 / 38%));
+  --tint: light-dark(rgb(26 18 48 / 8%), rgb(255 255 255 / 12%));
+  --tint-strong: light-dark(rgb(26 18 48 / 14%), rgb(255 255 255 / 16%));
+  --input-line: light-dark(rgb(26 18 48 / 30%), rgb(255 255 255 / 30%));
+  --input-line-hover: light-dark(rgb(26 18 48 / 55%), rgb(255 255 255 / 55%));
+  --text: light-dark(#1a1230, #f6f1ff);
+  --muted: light-dark(#5b5170, #b9aed0);
+  /* Text on a var(--text) fill: the selected tab, a hovered button */
+  --inverse: light-dark(#ffffff, #0b0718);
+  /* Text straight on the sky, outside any panel */
+  --sky-text-muted: light-dark(#2e2547, #b9aed0);
+  --sky-accent: light-dark(#1a1230, #ffc65c);
+  --code: light-dark(#a3134d, #ffc65c);
+  --autofill: light-dark(#eef0f6, #1a1030);
+
+  /* Colours. Text on the bright fills (pink, gold, teal) is always --ink. */
+  --ink: #0b0718;
+  --pink: #ff3d7f;
+  --orange: #ff8a3d;
+  --gold: light-dark(#ffb627, #ffc65c);
+  --teal: light-dark(#1fcfbf, #2ee6d6);
+  --info: light-dark(#0e8a7d, #2ee6d6);
+  --info-bg: light-dark(rgb(14 138 125 / 10%), rgb(46 230 214 / 10%));
+  --red: light-dark(#d92d3a, #ff5a5f);
+  --error-bg: light-dark(rgb(217 45 58 / 10%), rgb(255 90 95 / 14%));
+
+  /* By day the title gets a hard dark edge to stand out against the bright sky, by night a neon glow */
+  --brand-edge: light-dark(#1a1230, transparent);
+  --brand-glow: light-dark(transparent, rgb(255 61 127 / 45%));
+  --heading-shadow: light-dark(rgb(255 61 127 / 28%), rgb(0 0 0 / 60%));
+
+  --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --sans: Barlow, system-ui, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
   color-scheme: light dark;
-  font: 16px/1.5 var(--sans);
+  font: 400 16px/1.5 var(--sans);
   color: var(--text);
-  background: var(--bg);
+  background: var(--sky-top);
+  scrollbar-color: var(--input-line) transparent;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #111418;
-    --surface: #191d23;
-    --text: #e5e8ec;
-    --muted: #9aa4b2;
-    --border: #2c333d;
-    --subtle: #242a32;
-    --accent: #f97316;
-    --accent-hover: #fb923c;
-    --on-accent: #1a1006;
-    --focus: #60a5fa;
-    --notice-bg: #15233f;
-    --notice-border: #1f3b73;
-    --notice-text: #c7d7fe;
-    --error-bg: #3a1515;
-    --error-border: #6b2424;
-    --error-text: #fecaca;
-    --shadow: none;
-  }
+:root[data-theme='day'] {
+  color-scheme: light;
+}
+
+:root[data-theme='night'] {
+  color-scheme: dark;
 }
 
 *,
@@ -56,20 +78,58 @@
   box-sizing: border-box;
 }
 
+/* No background on body: it would paint over the sky below. :root's shows until the sky loads. */
 body {
   margin: 0;
-  background: var(--bg);
+}
+
+/* The sky, with the sun low on the right, and in front of it the skyline with palms
+   (src/assets/skyline-*.svg, made by scripts/skyline.mjs). Fixed, so they stay put while pages scroll. */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+}
+
+body::before {
+  background:
+    radial-gradient(40rem 26rem at 84% 100%, var(--sun), transparent 70%),
+    radial-gradient(64rem 30rem at 18% 106%, var(--haze), transparent 70%),
+    linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 38%, var(--sky-low) 72%, var(--sky-horizon) 100%);
+}
+
+/* An image can't use light-dark(), so the night skyline repeats the theme choice as selectors */
+body::after {
+  background: url('./assets/skyline-day.svg') bottom center / max(100%, 1100px) auto no-repeat;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='day']) body::after {
+    background-image: url('./assets/skyline-night.svg');
+  }
+}
+
+:root[data-theme='night'] body::after {
+  background-image: url('./assets/skyline-night.svg');
 }
 
 #root {
   min-height: 100svh;
 }
 
+::selection {
+  background: var(--pink);
+  color: var(--ink);
+}
+
 h1 {
-  margin: 0 0 0.5rem;
-  font-size: 1.75rem;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
+  margin: 0 0 0.75rem;
+  font: italic 800 clamp(2rem, 4vw, 2.75rem) / 1 var(--display);
+  letter-spacing: 0.01em;
+  text-shadow: 0.06em 0.06em 0 var(--heading-shadow);
+  text-transform: uppercase;
 }
 
 p {
@@ -82,15 +142,15 @@ a {
 
 code {
   padding: 0.1em 0.35em;
-  border-radius: 4px;
-  background: var(--subtle);
+  background: var(--tint);
+  color: var(--code);
   font-family: var(--mono);
   font-size: 0.9em;
 }
 
 :focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
 }
 
 .muted {
@@ -98,34 +158,63 @@ code {
 }
 
 .brand {
-  color: var(--accent);
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  display: inline-block;
+  margin: 0;
+  /* Room for the italic overhang, which background-clip would cut off */
+  padding-right: 0.12em;
+  background: linear-gradient(100deg, var(--pink) 10%, var(--orange) 60%, var(--gold));
+  background-clip: text;
+  color: transparent;
+  font: italic 800 2.25rem / 1 var(--display);
+  letter-spacing: 0.01em;
   text-decoration: none;
   text-transform: uppercase;
+  /* text-shadow would paint over the clipped gradient, so the edge and the glow are filters */
+  filter: drop-shadow(0.045em 0.045em 0 var(--brand-edge)) drop-shadow(0 0 0.3em var(--brand-glow));
 }
 
-/* Buttons */
+.panel {
+  background: var(--panel);
+  border-top: 3px solid var(--pink);
+  backdrop-filter: blur(10px);
+}
+
+.badge {
+  padding: 0.3rem 0.9rem;
+  background: var(--role, var(--gold));
+  color: var(--ink);
+  font: 700 0.85rem / 1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  /* A parallelogram tag. Only on things that can't take focus, since clip-path would hide the outline. */
+  clip-path: polygon(0.45rem 0, 100% 0, calc(100% - 0.45rem) 100%, 0 100%);
+}
+
+/* Buttons: a bar that turns solid when hovered, like a selected menu item */
 
 .button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.5rem;
-  padding: 0 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
+  min-height: 2.75rem;
+  padding: 0 1.4rem;
+  border: 0;
+  border-radius: 0;
+  background: var(--tint);
   color: var(--text);
-  font: inherit;
-  font-weight: 600;
+  font: 700 1.05rem / 1 var(--display);
+  letter-spacing: 0.08em;
   text-decoration: none;
+  text-transform: uppercase;
   cursor: pointer;
+  transition:
+    background-color 0.12s,
+    color 0.12s;
 }
 
-.button:hover {
-  border-color: var(--muted);
+.button:hover:not(:disabled) {
+  background: var(--text);
+  color: var(--inverse);
 }
 
 .button:disabled {
@@ -134,198 +223,282 @@ code {
 }
 
 .button-primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.button-primary:hover:not(:disabled) {
-  border-color: var(--accent-hover);
-  background: var(--accent-hover);
+  background: var(--pink);
+  color: var(--ink);
 }
 
 .button-small {
-  min-height: 2rem;
-  padding: 0 0.75rem;
-  font-size: 0.875rem;
+  min-height: 2.25rem;
+  padding: 0 1rem;
+  font-size: 0.95rem;
 }
 
 /* Forms and messages */
 
-.card {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
 .field {
   display: grid;
-  gap: 0.375rem;
-  margin-bottom: 1rem;
-  font-size: 0.9rem;
-  font-weight: 600;
+  gap: 0.4rem;
+  margin-bottom: 1.1rem;
+}
+
+.field > span {
+  color: var(--muted);
+  font: 700 0.85rem / 1 var(--display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .field input {
-  min-height: 2.75rem;
-  padding: 0 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
+  min-height: 3rem;
+  padding: 0 0.9rem;
+  border: 0;
+  border-bottom: 2px solid var(--input-line);
+  border-radius: 0;
+  background: var(--well);
   color: var(--text);
-  font: inherit;
-  font-weight: 400;
+  font: 400 1.05rem var(--sans);
+}
+
+.field input:hover {
+  border-bottom-color: var(--input-line-hover);
 }
 
 .field input:focus-visible {
-  border-color: var(--focus);
+  border-bottom-color: var(--pink);
+  outline: 2px solid var(--pink);
   outline-offset: 0;
 }
 
+/* Chrome paints autofilled inputs light blue; keep the theme's colours */
+.field input:-webkit-autofill {
+  -webkit-text-fill-color: var(--text);
+  box-shadow: 0 0 0 100px var(--autofill) inset;
+  caret-color: var(--text);
+}
+
 .notice {
-  padding: 0.625rem 0.75rem;
-  border: 1px solid var(--notice-border);
-  border-radius: var(--radius);
-  background: var(--notice-bg);
-  color: var(--notice-text);
-  font-size: 0.9rem;
+  padding: 0.7rem 0.9rem;
+  border-left: 4px solid var(--info);
+  background: var(--info-bg);
+  font-size: 0.95rem;
 }
 
 .notice-error {
-  border-color: var(--error-border);
+  border-left-color: var(--red);
   background: var(--error-bg);
-  color: var(--error-text);
 }
 
 .hint {
   margin: 1.25rem 0 0;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 
-/* Login */
+/* Login: a title screen */
 
 .login {
   display: grid;
-  place-items: center;
+  align-content: center;
+  justify-items: start;
+  gap: 1.75rem;
   min-height: 100svh;
-  padding: 1.5rem 1rem;
+  padding: 3rem max(1.25rem, 9vw);
 }
 
-.login-card {
-  width: min(100%, 24rem);
-  padding: 2rem 1.75rem;
+.login-title .brand {
+  font-size: clamp(4rem, 13vw, 8.5rem);
+  line-height: 0.85;
 }
 
-.login-card .brand {
-  margin: 0 0 0.25rem;
+.login-tagline {
+  margin: 0.75rem 0 0;
+  color: var(--sky-accent);
+  font: 600 1rem / 1 var(--display);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
 }
 
-.login-card h1 {
+.login-panel {
+  width: min(100%, 26rem);
+  padding: 1.75rem;
+}
+
+.login-panel h1 {
   margin-bottom: 1.25rem;
+  font-size: 1.75rem;
 }
 
-.login-card .button {
+.login-panel .button {
   width: 100%;
   margin-top: 0.25rem;
 }
 
-/* Signed-in frame */
+/* Signed-in frame: title and player on top, menu tabs, then the page in one panel.
+   Each role has its own colour, like each playable character: on the tab strips and the role tag. */
+
+.app {
+  --role: var(--teal);
+
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 1.25rem 1.5rem 3rem;
+}
+
+.app[data-role='MANAGER'] {
+  --role: var(--gold);
+}
 
 .app-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem 1.5rem;
-  padding: 0.75rem 1.5rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.app-nav {
-  display: flex;
-  flex: 1;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-}
-
-.app-nav a {
-  padding: 0.375rem 0.75rem;
-  border-radius: var(--radius);
-  color: var(--muted);
-  font-size: 0.95rem;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.app-nav a:hover,
-.app-nav a.active {
-  background: var(--subtle);
-  color: var(--text);
-}
-
-.app-nav a.active {
-  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .app-user {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   margin-left: auto;
-  font-size: 0.9rem;
+}
+
+.app-player {
+  display: grid;
+  justify-items: end;
+  gap: 0.3rem;
 }
 
 .app-user-name {
-  font-weight: 600;
+  font: 700 1.35rem / 1 var(--display);
+  letter-spacing: 0.03em;
 }
 
-.badge {
-  padding: 0.125rem 0.5rem;
-  border-radius: 999px;
-  background: var(--subtle);
+.app-clock {
+  color: var(--sky-text-muted);
+  font: 600 0.9rem / 1 var(--display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.app-nav {
+  display: grid;
+  flex-basis: 100%;
+  grid-auto-columns: minmax(max-content, 1fr);
+  grid-auto-flow: column;
+  gap: 3px;
+  order: 3;
+  /* Scrolls sideways on its own if the tabs don't fit, instead of widening the page */
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.app-nav a {
+  padding: 0.75rem 1rem;
+  border-top: 4px solid var(--role);
+  background: var(--panel);
   color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 600;
+  font: 700 1.05rem / 1 var(--display);
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.app-nav a:hover {
+  background: var(--tint-strong);
+  color: var(--text);
+}
+
+.app-nav a.active {
+  background: var(--text);
+  color: var(--inverse);
+}
+
+.app-nav a:focus-visible {
+  outline-offset: -4px;
+  outline-color: var(--pink);
 }
 
 .app-main {
-  max-width: 72rem;
-  margin: 0 auto;
-  padding: 2rem 1.5rem;
+  min-height: 24rem;
+  margin-top: 3px;
+  padding: 2rem 2.25rem;
+  /* The tab strips above already carry the colour */
+  border-top: 0;
+}
+
+.app-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 3px;
+}
+
+/* Day/Night: two menu options side by side, the current one solid */
+.theme-switch {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.theme-switch button {
+  min-height: 2.25rem;
+  padding: 0 1rem;
+  border: 0;
+  background: var(--panel);
+  color: var(--muted);
+  font: 700 0.95rem / 1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.theme-switch button:hover {
+  background: var(--tint-strong);
+  color: var(--text);
+}
+
+.theme-switch button[aria-pressed='true'] {
+  background: var(--text);
+  color: var(--inverse);
 }
 
 .page-message {
-  max-width: 36rem;
-  margin: 3rem auto;
-  padding: 0 1rem;
-  text-align: center;
+  max-width: 34rem;
+}
+
+/* The router's error page has no frame around it, so it brings its own panel */
+main.page-message {
+  width: min(100% - 2rem, 34rem);
+  margin: 12vh auto;
+  padding: 2rem;
 }
 
 .error-detail {
   overflow-x: auto;
   padding: 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
+  border-left: 3px solid var(--red);
+  background: var(--well);
   font-family: var(--mono);
   font-size: 0.85rem;
-  text-align: left;
   white-space: pre-wrap;
 }
 
 @media (max-width: 640px) {
-  .app-header {
-    padding: 0.75rem 1rem;
+  .app {
+    padding: 1rem 1rem 2rem;
   }
 
-  .app-nav {
-    order: 3;
-    flex-basis: 100%;
+  .app-header .brand {
+    font-size: 1.75rem;
+  }
+
+  .app-nav a {
+    padding: 0.7rem 0.6rem;
+    font-size: 0.95rem;
+    letter-spacing: 0.04em;
   }
 
   .app-main {
-    padding: 1.5rem 1rem;
+    padding: 1.5rem 1.25rem;
   }
 }

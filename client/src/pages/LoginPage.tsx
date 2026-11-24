@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router'
 import { errorMessage, isApiError } from '../api/errors'
 import { useAuth } from '../auth/AuthContext'
 import type { LoginLocationState } from '../auth/guards'
+import { ThemeSwitch } from '../components/ThemeSwitch'
 import { API_MOCKING } from '../config'
 
 export function LoginPage() {
@@ -32,8 +33,11 @@ export function LoginPage() {
 
   return (
     <main className="login">
-      <form className="card login-card" onSubmit={handleSubmit} aria-labelledby="login-title">
+      <div className="login-title">
         <p className="brand">FixFlow</p>
+        <p className="login-tagline">Maintenance reports</p>
+      </div>
+      <form className="panel login-panel" onSubmit={handleSubmit} aria-labelledby="login-title">
         <h1 id="login-title">Sign in</h1>
 
         {endReason === 'expired' && !error && (
@@ -66,6 +70,8 @@ export function LoginPage() {
           </p>
         )}
       </form>
+
+      <ThemeSwitch />
     </main>
   )
 }

@@ -10,7 +10,7 @@ export function ErrorPage() {
       : null
 
   return (
-    <main className="page-message">
+    <main className="panel page-message">
       <h1>Something went wrong</h1>
       <p>The page crashed. Reload to try again.</p>
       {detail && <pre className="error-detail">{detail}</pre>}
