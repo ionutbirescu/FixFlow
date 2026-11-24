@@ -1,10 +1,14 @@
-function App() {
+import { createBrowserRouter } from 'react-router'
+import { RouterProvider } from 'react-router/dom'
+import { AuthProvider } from './auth/AuthProvider'
+import { routes } from './routes'
+
+const router = createBrowserRouter(routes)
+
+export default function App() {
   return (
-    <main>
-      <h1>FixFlow</h1>
-      <p>Industrial maintenance reports. Pages arrive with the client tasks.</p>
-    </main>
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   )
 }
-
-export default App

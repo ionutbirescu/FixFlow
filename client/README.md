@@ -1,10 +1,85 @@
 # FixFlow client
 
-React + TypeScript + Vite. Runs on http://localhost:3000.
+React 19 + TypeScript + Vite, with React Router 8 and Axios. Runs on http://localhost:3000.
 
 ```bash
 npm install
-npm run dev      # dev server with hot reload
-npm run lint     # oxlint
-npm run build    # type-check + production build into dist/
+npm run dev        # dev server against S1 (8081) and S2 (8082)
+npm run dev:mock   # dev server with the mock API: no backend needed
+npm test           # Vitest, once (npm run test:watch to keep it running)
+npm run lint       # oxlint
+npm run build      # type-check + production build into dist/
+npm run gen:api    # regenerate src/api/schema.gen.ts after contracts/openapi.yaml changes
 ```
+
+## Layout
+
+| Path | What it holds |
+| --- | --- |
+| `src/api/` | The typed API clients: one function per endpoint, the two Axios instances and their interceptors |
+| `src/auth/` | The session store, `AuthProvider` / `useAuth()`, and the route guards |
+| `src/routes.tsx` | Every page and the role that may open it |
+| `src/pages/`, `src/components/` | Pages and shared components |
+| `src/mocks/` | The MSW mock API, used by `npm run dev:mock` and by the tests |
+| `src/test/` | Test setup and helpers |
+
+## Calling the API
+
+Import the function for the endpoint from `src/api/` (`auth.ts`, `reports.ts`, `machines.ts`, `images.ts`). Each one returns the typed response body. The types come from `src/api/types.ts`.
+
+```ts
+import { listReports } from '../api/reports'
+
+const page = await listReports({ status: 'DONE', size: 10 }, { signal })
+```
+
+- `schema.gen.ts` is generated from `contracts/openapi.yaml`; never edit it by hand. After the spec changes, run `npm run gen:api` and commit the result. CI fails if the file is out of date.
+  - The generator runs on its own TypeScript 5 through `npx`, because TypeScript 7 no longer has the compiler API it needs.
+- Failed calls reject with an `AxiosError`. `isApiError(error, 404)` checks the status, and `errorMessage(error)` gives text to show: the server's `ErrorResponse.message`, or a generic message.
+- `GET /images/{id}` needs the Bearer token, which an `<img src>` can't send. Use `getImage(id)` and show the blob with `URL.createObjectURL`.
+- S1 handles every write, S2 every read. Their URLs come from `VITE_S1_URL` and `VITE_S2_URL` (baked in by the Docker build), defaulting to `localhost:8081` and `localhost:8082`.
+
+## Auth
+
+- `useAuth()` gives `session` (`token`, `role`, `username`, `expiresAt`), `login(credentials)` and `logout()`.
+- The session is kept in `localStorage` (`fixflow.session`), so it survives reloads and is shared by the open tabs. Signing in or out in one tab does the same in the others.
+- Every request to S1 or S2 carries `Authorization: Bearer <token>` while someone is signed in (`src/api/http.ts`).
+- A `401` to a request that carried the current token signs the user out. The guard then sends them to `/login`, which says the session expired, and back to the same page after they sign in again. After an explicit sign-out, the next sign-in starts on `/reports`.
+- A `403` doesn't sign anyone out; show it like any other error.
+
+## Routes and roles
+
+`src/routes.tsx` lists every page:
+
+- `RequireAuth` wraps everything except `/login`: signed-out visitors go to the login page.
+- `RequireRole roles={MANAGER_ONLY}` wraps the manager pages (`/machines/new`, `/machines/:id/edit`, `/users/new`). A technician who opens one gets a "No access" page, and the nav hides "Add user" from them.
+- The guards only decide what the browser shows. S1 and S2 check the role on every request.
+
+The pages that aren't built yet are `PlaceholderPage`s. To build one, replace its `element` in `routes.tsx`.
+
+## Mock API
+
+`npm run dev:mock` runs the app against MSW handlers in a service worker. The handlers follow `openapi.yaml`: the same status codes, `ErrorResponse` bodies, and role and ownership rules.
+
+- Logins: `tech1` (technician) and `manager1` (manager), both with the password `fixflow`.
+- The machines and maintenance history match `V2__seed.sql`, and five reports are added. Four belong to `tech1`; the newest is still `PENDING` when the page loads.
+- A new report stays `PENDING` for 4 seconds, then the fake AI decides it with the same keywords as the backend's `MockAiReportService`: "smoke" gives `CRITICAL`, "leak" `HIGH`, "noise" `MEDIUM`, anything else `LOW`, and `#fail` makes it `FAILED`.
+- The data lives in memory: reloading the page resets it.
+- The worker script is only served in mock mode. Production builds contain no mock code.
+
+## Tests
+
+Vitest runs in jsdom, with the same MSW handlers answering every request; an unhandled request fails the test.
+
+- `renderApp('/path')` renders the whole app (real routes, guards and auth) in a memory router; `signInAs('tech1')` starts a session first.
+- To change a response for one test, use `server.use(...)` and wrap the resolver in `cors()` from `src/mocks/handlers.ts`, because jsdom enforces CORS like a browser:
+
+  ```ts
+  server.use(http.get(`${S2_URL}/machines`, cors(() => HttpResponse.json([]))))
+  ```
+
+- The mock database and the session are reset after each test.
+
+## Troubleshooting
+
+- **Vitest says "failed to find the runner" on Windows**: the shell was started in a path with a lowercase drive letter (`d:\FixFlow`), so Vitest loads itself twice. Run the tests from PowerShell, or `cd` to the folder again with an uppercase drive letter: `cd /d D:\FixFlow\client` in cmd, `cd /D/FixFlow/client` in Git Bash.
