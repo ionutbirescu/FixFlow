@@ -41,6 +41,14 @@ jobs:
           cache-dependency-path: client/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - name: Check the API types match contracts/openapi.yaml
+        run: |
+          npm run gen:api
+          if ! git diff --exit-code -- src/api/schema.gen.ts; then
+            echo "::error file=client/src/api/schema.gen.ts::Out of date with contracts/openapi.yaml. Run 'npm run gen:api' in client/ and commit the result."
+            exit 1
+          fi
+      - run: npm test
       - run: npm run build
 
   docker:

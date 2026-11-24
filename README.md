@@ -18,7 +18,11 @@ The root `pom.xml` is the Maven parent: it pins Spring Boot 3.5 and Java 21, and
 
 ## Contracts
 
-- [`contracts/openapi.yaml`](contracts/openapi.yaml) describes every S1 and S2 endpoint. The client's MSW mocks and API types are built from it.
+- [`contracts/openapi.yaml`](contracts/openapi.yaml) describes every S1 and S2 endpoint. The client's API types are generated from it (`npm run gen:api` in `client/`, checked in CI), and its MSW mocks are typed with them.
+- What the client expects from S1 and S2 beyond the schemas:
+  - The JWT's `sub` claim is the username and `exp` is its expiry. The client shows the username and drops an expired token on load.
+  - The browser calls both servers directly from `http://localhost:3000`, so both answer CORS preflights for that origin, allowing `GET`, `POST`, `PUT` and `DELETE` and the `Authorization` and `Content-Type` headers.
+  - A `401` on any call signs the user out and sends them to the login page, so only answer `401` for a missing, invalid or expired token. A logged-in user without the right role gets `403`.
 - The Java side lives in `com.fixflow.contracts`:
   - `api`: request and response records
   - `event`: the `report.created` event and Kafka topic names
@@ -60,7 +64,7 @@ One shared PostgreSQL 16 database. The Flyway migrations live in [`contracts/src
 ## Prerequisites
 
 - JDK 21 or newer (the build targets Java 21)
-- Node.js 20.19+ or 22.12+ (CI uses 24)
+- Node.js 22.22.2+ or 24.15+ (CI and the client image use 24)
 - Docker, running: the backend tests start PostgreSQL with Testcontainers, and S1 needs a database to start
 - No Maven install needed: use the wrapper (`./mvnw`, or `mvnw.cmd` on Windows)
 
@@ -83,8 +87,12 @@ Client:
 ```bash
 cd client
 npm install
-npm run dev      # http://localhost:3000
+npm run dev        # http://localhost:3000, against S1 and S2
+npm run dev:mock   # the same, with a mock API in the browser: no backend needed
+npm test           # Vitest
 ```
+
+See [`client/README.md`](client/README.md) for how the client is organized.
 
 ## Docker Compose
 
@@ -142,4 +150,4 @@ mcp-server uses `DB_USER: ${DB_READONLY_USER}` and `DB_PASSWORD: ${DB_READONLY_P
 ## Workflow
 
 - One branch per task, opened as a PR against `main` with 1 reviewer.
-- CI (`.github/workflows/ci.yml`) builds and tests the backend, lints and builds the client, and checks the Compose file and the client image on every PR; keep it green before merging.
+- CI (`.github/workflows/ci.yml`) builds and tests the backend; lints, tests and builds the client and checks its API types match `openapi.yaml`; and checks the Compose file and the client image on every PR. Keep it green before merging.
