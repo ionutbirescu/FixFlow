@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#6dbdf2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0718" media="(prefers-color-scheme: dark)" />
+    <script>
+      // Applies a saved Day/Night choice before the first paint, so the page doesn't flash the other theme.
+      // src/theme.ts keeps it in sync after that.
+      try {
+        const theme = localStorage.getItem('fixflow.theme')
+        if (theme === 'day' || theme === 'night') document.documentElement.dataset.theme = theme
+      } catch {}
+    </script>
     <title>FixFlow</title>
   </head>
   <body>
