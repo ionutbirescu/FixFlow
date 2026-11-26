@@ -38,3 +38,9 @@ export interface CreateReportInput {
 
 export const ROLES = ['TECHNICIAN', 'MANAGER'] as const satisfies readonly Role[]
 export const REPORT_STATUSES = ['PENDING', 'DONE', 'FAILED'] as const satisfies readonly ReportStatus[]
+/** From least to most urgent */
+export const SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const satisfies readonly Severity[]
+
+/** What `POST /reports` accepts as `image`: a JPG or PNG (else 415) of at most 10 MB (else 413). */
+export const IMAGE_TYPES = ['image/jpeg', 'image/png'] as const
+export const MAX_IMAGE_BYTES = 10 * 1024 * 1024
