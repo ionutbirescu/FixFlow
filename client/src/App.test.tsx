@@ -1,7 +1,10 @@
 import { screen, within } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { listMachines } from './api/machines'
 import { STORAGE_KEY, sessionStore } from './auth/session'
+import { S1_URL } from './config'
+import { server } from './mocks/server'
 import { renderApp, signInAs } from './test/utils'
 
 async function submitLogin(user: ReturnType<typeof renderApp>['user'], username: string, password: string) {
@@ -37,6 +40,17 @@ describe('signing in', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Wrong username or password.')
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
     expect(sessionStore.getState().session).toBeNull()
+  })
+
+  it('tells a developer how to run without a backend when S1 is down', async () => {
+    server.use(http.post(`${S1_URL}/auth/login`, () => HttpResponse.error()))
+    const { user } = renderApp('/login')
+
+    await submitLogin(user, 'tech1', 'fixflow')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("Can't reach the server.")
+    expect(screen.getByText(/nothing answers at/)).toHaveTextContent('npm run dev:mock')
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
   })
 
   it('sends a signed-in user away from the login page', async () => {

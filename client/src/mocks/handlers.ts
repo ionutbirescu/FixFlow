@@ -6,11 +6,13 @@ import {
   type CreateReportResponse,
   type CreateUserRequest,
   type ErrorResponse,
+  IMAGE_TYPES,
   type LoginRequest,
   type LoginResponse,
   type MachineDto,
   type MachineRequest,
   type MaintenanceEventDto,
+  MAX_IMAGE_BYTES,
   REPORT_STATUSES,
   type ReportDetailDto,
   type ReportStatus,
@@ -24,8 +26,6 @@ import { S1_URL, S2_URL } from '../config'
 import { getDb, type MockUser, settle } from './db'
 import { createMockToken, readMockToken } from './jwt'
 import { readMultipart } from './multipart'
-
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
 type IdParams = { id: string }
 
@@ -89,7 +89,7 @@ export const handlers = [
     if (typeof machineId !== 'string' || !db.machines.some((machine) => machine.id === machineId)) {
       fail(request, 400, 'machineId must be the ID of an existing machine')
     }
-    if (image.type !== 'image/jpeg' && image.type !== 'image/png') fail(request, 415, 'The image must be a JPG or PNG')
+    if (!IMAGE_TYPES.includes(image.type as (typeof IMAGE_TYPES)[number])) fail(request, 415, 'The image must be a JPG or PNG')
     if (image.bytes.byteLength > MAX_IMAGE_BYTES) fail(request, 413, 'The image is larger than 10 MB')
 
     const imageId = crypto.randomUUID()

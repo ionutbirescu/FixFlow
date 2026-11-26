@@ -1,15 +1,17 @@
 import { type FormEvent, useState } from 'react'
 import { Navigate, useLocation } from 'react-router'
-import { errorMessage, isApiError } from '../api/errors'
+import { errorMessage, isApiError, isNetworkError } from '../api/errors'
 import { useAuth } from '../auth/AuthContext'
 import type { LoginLocationState } from '../auth/guards'
 import { ThemeSwitch } from '../components/ThemeSwitch'
-import { API_MOCKING } from '../config'
+import { DEV_AGAINST_BACKEND, S1_URL, SHOW_DEMO_LOGINS } from '../config'
 
 export function LoginPage() {
   const { session, endReason, login } = useAuth()
   const location = useLocation()
   const [error, setError] = useState<string | null>(null)
+  // The dev server against a backend that isn't running: say how to get going without one
+  const [noBackend, setNoBackend] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   // Already signed in, or just signed in: go where the guard sent us from.
@@ -20,6 +22,7 @@ export function LoginPage() {
     const form = new FormData(event.currentTarget)
     setSubmitting(true)
     setError(null)
+    setNoBackend(false)
     try {
       await login({
         username: String(form.get('username') ?? '').trim(),
@@ -27,6 +30,7 @@ export function LoginPage() {
       })
     } catch (err) {
       setError(isApiError(err, 401) ? 'Wrong username or password.' : errorMessage(err))
+      setNoBackend(DEV_AGAINST_BACKEND && isNetworkError(err))
       setSubmitting(false)
     }
   }
@@ -50,6 +54,12 @@ export function LoginPage() {
             {error}
           </p>
         )}
+        {DEV_AGAINST_BACKEND && noBackend && (
+          <p className="notice">
+            Dev server: nothing answers at <code>{S1_URL}</code>. Start S1 and S2, or stop this server and run{' '}
+            <code>npm run dev:mock</code> to use the mock API instead.
+          </p>
+        )}
 
         <label className="field">
           <span>Username</span>
@@ -64,9 +74,10 @@ export function LoginPage() {
           {submitting ? 'Signing in…' : 'Sign in'}
         </button>
 
-        {API_MOCKING && (
+        {SHOW_DEMO_LOGINS && (
           <p className="hint">
-            Mock API: sign in as <code>tech1</code> or <code>manager1</code>, password <code>fixflow</code>.
+            Demo logins: <code>tech1</code> (technician) or <code>manager1</code> (manager), both with the password{' '}
+            <code>fixflow</code>.
           </p>
         )}
       </form>

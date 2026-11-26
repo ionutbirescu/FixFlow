@@ -4,8 +4,10 @@ import { MANAGER_ONLY } from './auth/roles'
 import { AppLayout } from './components/AppLayout'
 import { ErrorPage } from './pages/ErrorPage'
 import { LoginPage } from './pages/LoginPage'
+import { NewReportPage } from './pages/NewReportPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
+import { ReportPage } from './pages/ReportPage'
 
 // Every page, and who may open it. App.tsx serves these with a browser router; the tests use a memory router.
 export const routes: RouteObject[] = [
@@ -29,22 +31,8 @@ export const routes: RouteObject[] = [
                   </PlaceholderPage>
                 ),
               },
-              {
-                path: 'reports/new',
-                element: (
-                  <PlaceholderPage title="New report">
-                    Upload a photo of a faulty machine with a short description.
-                  </PlaceholderPage>
-                ),
-              },
-              {
-                path: 'reports/:id',
-                element: (
-                  <PlaceholderPage title="Report">
-                    The report's status, refreshed every 3 seconds until the AI result arrives.
-                  </PlaceholderPage>
-                ),
-              },
+              { path: 'reports/new', element: <NewReportPage /> },
+              { path: 'reports/:id', element: <ReportPage /> },
               {
                 path: 'machines',
                 element: (
